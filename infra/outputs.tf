@@ -17,3 +17,12 @@ output "runtime_service_account" {
   description = "Application runtime service account"
   value       = google_service_account.runtime.email
 }
+output "cloud_run_service_name" {
+  description = "Production Cloud Run service name"
+  value       = google_cloud_run_v2_service.web.name
+}
+
+output "cloud_run_url" {
+  description = "Production application URL"
+  value       = google_cloud_run_v2_service.web.uri
+}
