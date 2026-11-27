@@ -93,6 +93,9 @@ jobs:
       contents: read
       id-token: write
 
+    outputs:
+      image: ${{ steps.image.outputs.uri }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -132,8 +135,6 @@ jobs:
             docker tag "secret-santa:$TAG" "$IMAGE:$TAG"
             docker push "$IMAGE:$TAG"
           fi
-        outputs:
-          image: ${{ steps.image.outputs.uri }}
 
       - name: Resolve image digest
         id: image
@@ -237,5 +238,3 @@ jobs:
             --project="$PROJECT" \
             --remove-tags="$TAG" \
             --quiet
-
-
