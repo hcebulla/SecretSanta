@@ -1,7 +1,242 @@
-﻿@page "/"
+﻿
+@page "/"
+@rendermode InteractiveServer
+@using SecretSanta.Web.Features.Drawing
+@using System.ComponentModel.DataAnnotations
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Secret Santa</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="container py-4">
+    <h1>Secret Santa 🎄</h1>
+    <p>Add your participants and let us handle the draw.</p>
 
-Welcome to your new app.
+    <h3>Participants</h3>
+
+    @foreach (var participant in participants)
+    {
+        <div class="row mb-3" @key="participant.Id">
+            <div class="col">
+                <input class="form-control"
+                       placeholder="Name"
+                       aria-label="Participant name"
+                       @bind="participant.Name"
+                       @bind:event="oninput" />
+            </div>
+
+            <div class="col">
+                <input class="form-control"
+                       type="email"
+                       placeholder="Email address"
+                       aria-label="Participant email"
+                       @bind="participant.Email" />
+            </div>
+
+            <div class="col-auto">
+                <button class="btn btn-outline-danger"
+                        @onclick="() => RemoveParticipant(participant)">
+                    Remove
+                </button>
+            </div>
+        </div>
+    }
+
+    <button class="btn btn-outline-primary"
+            @onclick="AddParticipant">
+        + Add participant
+    </button>
+
+    <hr />
+
+    <h3>Spouse exclusions</h3>
+    <p>Spouses cannot draw each other.</p>
+
+    @foreach (var pair in spousePairs)
+    {
+        <div class="row mb-3" @key="pair">
+            <div class="col">
+                <select class="form-select"
+                        aria-label="First spouse"
+                        @bind="pair.FirstParticipantId">
+                    <option value="">Select participant</option>
+
+                    @foreach (var participant in participants)
+                    {
+                        <option value="@participant.Id">
+                            @participant.Name
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="col">
+                <select class="form-select"
+                        aria-label="Second spouse"
+                        @bind="pair.SecondParticipantId">
+                    <option value="">Select participant</option>
+
+                    @foreach (var participant in participants)
+                    {
+                        <option value="@participant.Id">
+                            @participant.Name
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-auto">
+                <button class="btn btn-outline-danger"
+                        @onclick="() => RemoveSpousePair(pair)">
+                    Remove
+                </button>
+            </div>
+        </div>
+    }
+
+    <button class="btn btn-outline-primary"
+            @onclick="AddSpousePair">
+        + Add couple
+    </button>
+
+    <hr />
+
+    @if (errorMessage is not null)
+    {
+        <div class="alert alert-danger" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (successMessage is not null)
+    {
+        <div class="alert alert-success" role="status">
+            @successMessage
+        </div>
+    }
+
+    <button class="btn btn-success btn-lg"
+            @onclick="Draw">
+        Draw names
+    </button>
+</div>
+
+@code {
+    private readonly List<ParticipantInput> participants =
+    [
+        new(),
+        new()
+    ];
+
+    private readonly List<SpousePairInput> spousePairs = [];
+
+    private IReadOnlyList<Assignment> assignments = [];
+
+    private string? errorMessage;
+    private string? successMessage;
+
+    private void AddParticipant()
+    {
+        participants.Add(new ParticipantInput());
+    }
+
+    private void RemoveParticipant(ParticipantInput participant)
+    {
+        participants.Remove(participant);
+
+        spousePairs.RemoveAll(pair =>
+            pair.FirstParticipantId == participant.Id ||
+            pair.SecondParticipantId == participant.Id);
+    }
+
+    private void AddSpousePair()
+    {
+        spousePairs.Add(new SpousePairInput());
+    }
+
+    private void RemoveSpousePair(SpousePairInput pair)
+    {
+        spousePairs.Remove(pair);
+    }
+
+    private void Draw()
+    {
+        errorMessage = null;
+        successMessage = null;
+        assignments = [];
+
+        try
+        {
+            ValidateForm();
+
+            var drawParticipants = participants
+                .Select(participant => participant.ToParticipant())
+                .ToArray();
+
+            var drawSpousePairs = spousePairs
+                .Select(pair => new SpousePair(
+                    pair.FirstParticipantId!.Value,
+                    pair.SecondParticipantId!.Value))
+                .ToArray();
+
+            assignments = MatchingAlgorithm.Draw(
+                drawParticipants,
+                drawSpousePairs);
+
+            successMessage =
+                $"Successfully generated {assignments.Count} assignments.";
+        }
+        catch (ArgumentException exception)
+        {
+            errorMessage = exception.Message;
+        }
+        catch (InvalidOperationException exception)
+        {
+            errorMessage = exception.Message;
+        }
+    }
+
+    private void ValidateForm()
+    {
+        if (participants.Count < 2)
+        {
+            throw new ArgumentException(
+                "At least two participants are required.");
+        }
+
+        var emailValidator = new EmailAddressAttribute();
+
+        foreach (var participant in participants)
+        {
+            if (string.IsNullOrWhiteSpace(participant.Name))
+            {
+                throw new ArgumentException(
+                    "Every participant must have a name.");
+            }
+
+            if (string.IsNullOrWhiteSpace(participant.Email) ||
+                !emailValidator.IsValid(participant.Email.Trim()))
+            {
+                throw new ArgumentException(
+                    $"{participant.Name} must have a valid email address.");
+            }
+        }
+
+        var uniqueEmailCount = participants
+            .Select(participant => participant.Email.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        @* if (uniqueEmailCount != participants.Count)
+        {
+            throw new ArgumentException(
+                "Every participant must have a unique email address.");
+        } *@
+
+        if (spousePairs.Any(pair =>
+            pair.FirstParticipantId is null ||
+            pair.SecondParticipantId is null))
+        {
+            throw new ArgumentException(
+                "Please complete all spouse pairs.");
+        }
+    }
+}
