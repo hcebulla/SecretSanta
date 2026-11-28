@@ -1,4 +1,5 @@
 using SecretSanta.Web.Components;
+using SecretSanta.Web.Infrastructure.Email;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +9,14 @@ builder.Services.AddRazorComponents()
 
 // Add healthchecks
 builder.Services.AddHealthChecks();
+
+// Register services
+builder.Services.AddHttpClient<IEmailService, EmailService>(
+    client =>
+    {
+        client.BaseAddress = new Uri("https://api.resend.com/");
+        client.Timeout = TimeSpan.FromSeconds(30);
+    });
 
 var app = builder.Build();
 
